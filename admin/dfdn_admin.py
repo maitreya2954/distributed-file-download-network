@@ -13,6 +13,7 @@ def initiateDownload():
 def _SendPartitionData(partitionData):
     if 'partitions' in partitionData:
         for partition in partitionData['partitions']:
+            # print('Sending partition info to', partition['addr'], partition['port'], partition)
             _PostRequest(partition['addr'], partition['port'], 'v1/partitiondata', partition)
     else:
         raise Exception('Partitions not found in the partition data')
@@ -37,7 +38,7 @@ def _SendHelperData():
     return res
 
 def _BuildUrl(addr, port, path, protocol):
-    return protocol + '://' + addr + ':' + str(port) + '/' if path[0] == '/' else '' + path
+    return protocol + '://' + addr + ':' + str(port) + ('/' if not path.startswith('/') else '') + path
 
 def _FindHelpers():
     detectedHelpers = [{'addr': '66.71.23.120',

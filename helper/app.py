@@ -1,8 +1,14 @@
 from flask import request
 from flask_api import FlaskAPI, status
+from dfdn_helper import startDownload
+from multiprocessing.pool import ThreadPool
 
-detectedHelpers = ['']
-data = None
+POOL = None
+NO_OF_THREADS = 5
+
+POOL = ThreadPool(processes=NO_OF_THREADS)
+print('Thread pool created with ' + str(NO_OF_THREADS) + ' threads')
+
 app = FlaskAPI(__name__)
 
 @app.route('/')
@@ -16,11 +22,12 @@ def serverup():
 @app.route('/v1/partitiondata', methods=['POST'])
 def partitiondata():
     try:
-        if 'data' in request.args:
-            data = request.args['data']
-            print(data)
-    except:
-        print('Error while processing partition data')
+        partition = request.json
+        print(partition)
+        POOL.apply_async(startDownload)
+        return ''
+    except Exception as e:
+        print('Error while processing partition data : ', e)
         return 'Error occured', status.HTTP_500_INTERNAL_SERVER_ERROR
 
 if __name__=='__main__':
