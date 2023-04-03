@@ -15,7 +15,7 @@ app = FlaskAPI(__name__)
 def landing():
     return 'Admin flask application'
 
-@app.route('/healthcheck', methods=['GET'])
+@app.route('/healthCheck', methods=['GET'])
 def serverup():
     return ''
 

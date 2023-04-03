@@ -15,11 +15,11 @@ app = FlaskAPI(__name__)
 def landing():
     return 'Helper flask application'
 
-@app.route('/v1/healthcheck', methods=['GET'])
+@app.route('/v1/healthCheck', methods=['GET'])
 def serverup():
     return ''
 
-@app.route('/v1/partitiondata', methods=['POST'])
+@app.route('/v1/partitionData', methods=['POST'])
 def partitiondata():
     try:
         partition = request.json

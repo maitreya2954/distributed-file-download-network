@@ -18,7 +18,7 @@ def _SendPartitionData(partitionData):
         for partition in partitionData['partitions']:
             partition['remote'] = _BuildUrl(REMOTE_SERVER, PORT, 'v1/chunk')
             # print('Sending partition info to', partition['addr'], partition['port'], partition)
-            _PostRequest(partition['addr'], partition['port'], 'v1/partitiondata', partition)
+            _PostRequest(partition['addr'], partition['port'], 'v1/partitionData', partition)
     else:
         raise Exception('Partitions not found in the partition data')
     
