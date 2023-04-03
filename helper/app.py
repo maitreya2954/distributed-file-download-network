@@ -24,7 +24,7 @@ def partitiondata():
     try:
         partition = request.json
         print(partition)
-        POOL.apply_async(startDownload)
+        POOL.apply_async(startDownload, args=[partition])
         return ''
     except Exception as e:
         print('Error while processing partition data : ', e)
