@@ -1,3 +1,6 @@
 helper/__pycache__/
 admin/__pycache__/
 server/__pycache__/
+helper/chunks/
+admin/chunks/
+
