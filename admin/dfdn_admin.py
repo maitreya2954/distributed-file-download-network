@@ -2,7 +2,7 @@ import sys
 import requests
 import time
 
-REMOTE_SERVER='66.71.23.120'
+REMOTE_SERVER='127.0.0.1'
 PORT=9999
 PROGRESS=0
 
@@ -21,14 +21,14 @@ def monitorProgress(partitionInfo):
         while not downloadComplete(partitionInfo):  
             printstring = '' 
             for partition in partitionInfo:
-                res = getRequest(partition['addr'], partition['port'], '/v1/progress')
-                print('progress update', res.json())
+                chunkId = partition['reqId'] + '-' + str(partition['chunk'])
+                res = getRequest(partition['addr'], partition['port'], '/v1/progress/' + chunkId)
                 partition['progress'] = res.json()['progress']
                 printstring += partition['addr'] + ':' + str(partition['port']) + ' - ' + str(partition['progress']) + ' | '
             sys.stdout.write("\r" + printstring)
             sys.stdout.flush()
             time.sleep(1)
-        print('>>> Download Completed')
+        print('\n>>> Download Completed')
     except Exception as e:
         print('Error while monitoring progress', e)
     
@@ -79,13 +79,13 @@ def _SendHelperData():
         raise Exception('Error while finding helper node', e)
         # TODO send abort to server
     res = {'partitions': [
-        {'addr': '66.71.23.120',
+        {'addr': '127.0.0.1',
         'port': 9999,
         'chunk': 0},
-        {'addr': '66.71.23.120',
+        {'addr': '127.0.0.1',
         'port': 9998,
         'chunk': 1},
-        {'addr': '66.71.23.120',
+        {'addr': '127.0.0.1',
         'port': 9997,
         'chunk': 2}]}
     return res
@@ -94,11 +94,11 @@ def _BuildUrl(addr, port, path, protocol='http'):
     return protocol + '://' + addr + ':' + str(port) + ('/' if not path.startswith('/') else '') + path
 
 def _FindHelpers():
-    detectedHelpers = [{'addr': '66.71.23.120',
+    detectedHelpers = [{'addr': '127.0.0.1',
                         'port': 9999},
-                       {'addr': '66.71.23.120',
+                       {'addr': '127.0.0.1',
                         'port': 9998},
-                       {'addr': '66.71.23.120',
+                       {'addr': '127.0.0.1',
                         'port': 9997}]
     return detectedHelpers
 
@@ -122,7 +122,7 @@ def downloadChunk(partition):
                 for data in response.iter_content(chunk_size=4096):
                     dl += len(data)
                     f.write(data)
-                    # PROGRESS = int((dl*100)/total_length)
+                    PROGRESS = int((dl*100)/total_length)
                     # sys.stdout.write('\rProgress: ' + str(PROGRESS))    
                     # sys.stdout.flush()
                     # done = int(50 * dl / total_length)

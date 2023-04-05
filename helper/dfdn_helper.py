@@ -1,13 +1,12 @@
 import requests
 import sys
 
-PROGRESS = 0
-
-def downloadChunk(partition):
+def downloadChunk(partition, progressdict):
+    chunkId = partition['reqId'] + '-' + str(partition['chunk'])
     try:
         # https://speed.hetzner.de/100MB.bin
         print('Starting download from', partition['src'], 'with chunk', partition['chunk'])
-        file_name = 'chunks/' + partition['reqId'] + '-' + str(partition['chunk'])
+        file_name = 'chunks/' + chunkId
         # link = partition['src']
         link = 'https://speed.hetzner.de/100MB.bin'
         with open(file_name, "wb") as f:
@@ -23,8 +22,9 @@ def downloadChunk(partition):
                 for data in response.iter_content(chunk_size=4096):
                     dl += len(data)
                     f.write(data)
-                    PROGRESS = int((dl*100)/total_length)
-                    sys.stdout.write('\rProgress: ' + str(PROGRESS))    
+                    progress = int((dl*100)/total_length)
+                    progressdict[chunkId] = progress
+                    sys.stdout.write('\rProgress: ' + str(progress))    
                     sys.stdout.flush()
                     # done = int(50 * dl / total_length)
                     # sys.stdout.write("\r[%s%s]" % ('=' * done, ' ' * (50-done)) )    
