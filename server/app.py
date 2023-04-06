@@ -74,6 +74,9 @@ def helperData():
             if path.is_file(path) and path.name != 'manifest':
                 resMap['partitionData'].append({'fileName':path.name,'fileSize':os.path.getsize(path),'helper':req['partitions'][i]['addr']})
                 i += 1
+        manifestF = open(dirName+'/chunks/manifest','r')
+        manifest = manifestF.read()
+        resMap['manifest'] = manifest
         return json.dumps(resMap,0)
     except Exception as e:
         print('Error occured while splitting file', e)
