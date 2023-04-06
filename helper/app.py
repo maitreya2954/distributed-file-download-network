@@ -1,6 +1,6 @@
-from flask import request
+from flask import request, send_from_directory
 from flask_api import FlaskAPI, status
-from dfdn_helper import downloadChunk, getProgress
+from dfdn_helper import downloadChunk
 from multiprocessing.pool import ThreadPool
 from multiprocessing import Manager
 import os
@@ -48,7 +48,15 @@ def partitiondata():
 @app.route('/v1/progress/<chunkId>', methods=['GET'])
 def progress(chunkId):
     # print('Progress API', getProgress())
-    return {'progress': PROGRESS_DICT[chunkId]}
+    return {'progress': PROGRESS_DICT[chunkId] if chunkId in PROGRESS_DICT else 0}
+
+@app.route('/v1/chunk/<chunkId>', methods=['GET'])
+def chunk(chunkId):
+    try:
+        return send_from_directory('chunks', chunkId, mimetype='application/octet-stream')
+    except Exception as e:
+        print('Error while sending the chunk : ', e)
+        return 'Error occured', status.HTTP_500_INTERNAL_SERVER_ERROR
 
 def shutdown_hook(signum=None, frame=None):
     print('Shutdown hook invoked. Shutting down.')

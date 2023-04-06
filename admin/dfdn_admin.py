@@ -1,10 +1,12 @@
 import sys
 import requests
 import time
+import os
+from filesplit.merge import Merge
+import shutil
 
 REMOTE_SERVER='127.0.0.1'
 PORT=9999
-PROGRESS=0
 
 def downloadComplete(partitionInfo):
     done = 1
@@ -12,7 +14,7 @@ def downloadComplete(partitionInfo):
         done = done & (1 if partition['progress'] == 100 else 0)
     return done
 
-def monitorProgress(partitionInfo):
+def _MonitorProgress(partitionInfo):
     try:
         print('Progress monitor started')
         for partition in partitionInfo:
@@ -22,22 +24,45 @@ def monitorProgress(partitionInfo):
             printstring = '' 
             for partition in partitionInfo:
                 chunkId = partition['reqId'] + '-' + str(partition['chunk'])
-                res = getRequest(partition['addr'], partition['port'], '/v1/progress/' + chunkId)
-                partition['progress'] = res.json()['progress']
+                if partition['progress'] != 100:
+                    res = getRequest(partition['addr'], partition['port'], '/v1/progress/' + chunkId)
+                    partition['progress'] = res.json()['progress']
                 printstring += partition['addr'] + ':' + str(partition['port']) + ' - ' + str(partition['progress']) + ' | '
             sys.stdout.write("\r" + printstring)
             sys.stdout.flush()
-            time.sleep(1)
-        print('\n>>> Download Completed')
+            time.sleep(2)
+        print('\n>>> Chunks downloaded on all helpers. Starting gathering chunks')
+        return partitionInfo
     except Exception as e:
-        print('Error while monitoring progress', e)
+        raise e
+        
+def _GatherChunks(requestId, partitionInfo):
+    try:
+        downloadDir = 'downloads/' + requestId + '/chunks'
+        os.makedirs(downloadDir)
+        for partition in partitionInfo:
+            chunkId = partition['reqId'] + '-' + str(partition['chunk'])
+            if partition['chunk'] == 0:
+                shutil.move('chunks/'+chunkId, downloadDir + '/' + chunkId)
+            else:
+                print('Getting chunk: ', chunkId)
+                response = getRequest(partition['addr'], partition['port'], '/v1/chunk/' + chunkId)
+                with open(downloadDir + '/' + chunkId, 'wb') as f:
+                    f.write(response.content)
+                print(chunkId, 'received')
+        print('Merging files')
+        merge = Merge(downloadDir, 'downloads/' + requestId, requestId)
+        merge.merge(cleanup=True)
+    except Exception as e:
+        raise e
     
 def initiateDownload(requestId):
     try:
-        time.sleep(1)
         partitionInfo = _SendHelperData()
         _SendPartitionData(partitionInfo, requestId)
-        return partitionInfo['partitions']
+        _MonitorProgress(partitionInfo['partitions'])
+        _GatherChunks(requestId, partitionInfo['partitions'])
+        return partitionInfo
     except Exception as e:
         print('Exception while initiating download', e)
     
@@ -102,15 +127,16 @@ def _FindHelpers():
                         'port': 9997}]
     return detectedHelpers
 
-def downloadChunk(partition):
+def downloadChunk(partition, progressdict):
+    chunkId = partition['reqId'] + '-' + str(partition['chunk'])
     try:
         # https://speed.hetzner.de/100MB.bin
         print('Starting download from', partition['src'], 'with chunk', partition['chunk'])
-        file_name = 'chunks/' + partition['reqId'] + '-' + str(partition['chunk'])
+        file_name = 'chunks/' + chunkId
         # link = partition['src']
-        link = 'https://speed.hetzner.de/100MB.bin'
+        # link = 'https://speed.hetzner.de/100MB.bin'
+        link = 'http://speedtest.ftp.otenet.gr/files/test10Mb.db'
         with open(file_name, "wb") as f:
-            print("Downloading %s" % file_name)
             response = requests.get(link, stream=True)
             total_length = response.headers.get('content-length')
 
@@ -119,18 +145,17 @@ def downloadChunk(partition):
             else:
                 dl = 0
                 total_length = int(total_length)
-                for data in response.iter_content(chunk_size=4096):
+                for data in response.iter_content(chunk_size=8192):
                     dl += len(data)
                     f.write(data)
-                    PROGRESS = int((dl*100)/total_length)
-                    # sys.stdout.write('\rProgress: ' + str(PROGRESS))    
+                    progress = int((dl*100)/total_length)
+                    progressdict[chunkId] = progress
+                    # sys.stdout.write('\rProgress: ' + str(progress))    
                     # sys.stdout.flush()
                     # done = int(50 * dl / total_length)
                     # sys.stdout.write("\r[%s%s]" % ('=' * done, ' ' * (50-done)) )    
                     # sys.stdout.flush()
+        # print('Download complete')
     except Exception as e:
         print('Error occured while downloading the chunk', e)
-
         
-def getProgress():
-    return PROGRESS

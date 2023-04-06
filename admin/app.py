@@ -1,15 +1,23 @@
 from flask import request, render_template
 from flask_api import FlaskAPI, status, exceptions
 from multiprocessing.pool import ThreadPool
-from dfdn_admin import initiateDownload, postRequest, monitorProgress, downloadChunk, getProgress
+from multiprocessing import Manager
+from dfdn_admin import initiateDownload, postRequest, downloadChunk
 import time
 import os
+import sys
+import signal
 
 POOL = None
 NO_OF_THREADS = 5
 
 POOL = ThreadPool(processes=NO_OF_THREADS)
 print('Thread pool created with ' + str(NO_OF_THREADS) + ' threads')
+
+MANAGER = Manager()
+print('Created a pool manager')
+
+PROGRESS_DICT = MANAGER.dict()
 
 try:
     os.mkdir('chunks')
@@ -32,8 +40,10 @@ def serverup():
 def ready():
     try:
         # TODO : Take request id from the response
-        requestId = str(time.time() * 1000)
-        POOL.apply_async(initiateDownload, args=[requestId], callback=monitorProgress)
+        # requestId = request.json['reqId']
+        requestId = str(time.time())
+        print(requestId)
+        POOL.apply_async(initiateDownload, args=[requestId])
         return 'Completed'
     except Exception as e:
         print('Error occured while initiating download', e)
@@ -55,16 +65,25 @@ def partitiondata():
     try:
         partition = request.json
         print(partition)
-        POOL.apply_async(downloadChunk, args=[partition])
+        POOL.apply_async(downloadChunk, args=[partition, PROGRESS_DICT])
         return ''
     except Exception as e:
         print('Error while processing partition data : ', e)
         return 'Error occured', status.HTTP_500_INTERNAL_SERVER_ERROR
 
-@app.route('/v1/progress', methods=['GET'])
-def progress():
+@app.route('/v1/progress/<chunkId>', methods=['GET'])
+def progress(chunkId):
     # print('Progress API', getProgress())
-    return {'progress': getProgress()}
+    return {'progress': PROGRESS_DICT[chunkId] if chunkId in PROGRESS_DICT else 0}
+
+def shutdown_hook(signum=None, frame=None):
+    print('Shutdown hook invoked. Shutting down.')
+    POOL.close()
+    PROGRESS_DICT.clear()
+    MANAGER.shutdown()
+    sys.exit(0)
+    
+signal.signal(signal.SIGINT, shutdown_hook)
 
 if __name__=='__main__':
     app.run(debug=True)
