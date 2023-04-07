@@ -2,11 +2,12 @@ from flask import request, render_template
 from flask_api import FlaskAPI, status, exceptions
 from multiprocessing.pool import ThreadPool
 from multiprocessing import Manager
-from dfdn_admin import initiateDownload, postRequest, downloadChunk
+from dfdn_admin import initiateDownload, postRequest, downloadChunk, REMOTE_SERVER, PORT
 import time
 import os
 import sys
 import signal
+import traceback
 
 POOL = None
 NO_OF_THREADS = 5
@@ -40,21 +41,22 @@ def serverup():
 def ready():
     try:
         # TODO : Take request id from the response
-        # requestId = request.json['reqId']
-        requestId = str(time.time())
-        print(requestId)
+        
+        requestId = request.json['requestId']
+        # requestId = str(time.time())
         POOL.apply_async(initiateDownload, args=[requestId])
         return 'Completed'
     except Exception as e:
-        print('Error occured while initiating download', e)
+        print('Error occured while initiating download')
+        traceback.print_exc()
         return 'Error occured', status.HTTP_500_INTERNAL_SERVER_ERROR
     
 @app.route('/v1/downloadLink', methods=['POST'])
 def downloadLink():
     try:
         link = request.form['dlink']
-        jsondata = {'link': link}
-        # postRequest(dfdn_admin.REMOTE_SERVER, dfdn_admin.PORT, 'v1/begin', data=jsondata)
+        jsondata = {'url': link}
+        postRequest(REMOTE_SERVER, PORT, 'v1/begin', data=jsondata)
         return render_template('success.html')
     except Exception as e:
         print('Error occured while sending the link to server', e)

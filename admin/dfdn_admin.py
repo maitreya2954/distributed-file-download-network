@@ -4,8 +4,10 @@ import time
 import os
 from filesplit.merge import Merge
 import shutil
+import traceback
+import hashlib
 
-REMOTE_SERVER='127.0.0.1'
+REMOTE_SERVER='10.0.0.209'
 PORT=9999
 
 def downloadComplete(partitionInfo):
@@ -23,7 +25,7 @@ def _MonitorProgress(partitionInfo):
         while not downloadComplete(partitionInfo):  
             printstring = '' 
             for partition in partitionInfo:
-                chunkId = partition['reqId'] + '-' + str(partition['chunk'])
+                chunkId = partition['reqId'] + '-' + str(partition['fileName'])
                 if partition['progress'] != 100:
                     res = getRequest(partition['addr'], partition['port'], '/v1/progress/' + chunkId)
                     partition['progress'] = res.json()['progress']
@@ -40,47 +42,64 @@ def _GatherChunks(requestId, partitionInfo):
     try:
         downloadDir = 'downloads/' + requestId + '/chunks'
         os.makedirs(downloadDir)
-        for partition in partitionInfo:
-            chunkId = partition['reqId'] + '-' + str(partition['chunk'])
-            if partition['chunk'] == 0:
-                shutil.move('chunks/'+chunkId, downloadDir + '/' + chunkId)
+        for partition in partitionInfo['partitionData']:
+            chunkId = partition['reqId'] + '-' + str(partition['fileName'])
+            if partition['admin']:
+                shutil.move('chunks/'+chunkId, downloadDir + '/' + partition['fileName'])
             else:
                 print('Getting chunk: ', chunkId)
                 response = getRequest(partition['addr'], partition['port'], '/v1/chunk/' + chunkId)
-                with open(downloadDir + '/' + chunkId, 'wb') as f:
+                with open(downloadDir + '/' + partition['fileName'], 'wb') as f:
                     f.write(response.content)
                 print(chunkId, 'received')
         print('Merging files')
-        merge = Merge(downloadDir, 'downloads/' + requestId, requestId)
+        open(downloadDir + '/manifest', "w").write(partitionInfo['manifest'])
+        merge = Merge(downloadDir, 'downloads/' + requestId, partitionInfo['originalName'])
         merge.merge(cleanup=True)
+        with open('downloads/' + requestId + '/' + partitionInfo['originalName'],"rb") as f:
+            bytes = f.read()
+            if hashlib.md5(bytes).hexdigest() == partitionInfo['checksum']:
+                print('Merge successfully completed')
+            else:
+                raise Exception('File corrupted')
     except Exception as e:
         raise e
     
 def initiateDownload(requestId):
     try:
-        partitionInfo = _SendHelperData()
+        partitionInfo = _SendHelperData(requestId)
         _SendPartitionData(partitionInfo, requestId)
-        _MonitorProgress(partitionInfo['partitions'])
-        _GatherChunks(requestId, partitionInfo['partitions'])
+        _MonitorProgress(partitionInfo['partitionData'])
+        _GatherChunks(requestId, partitionInfo)
         return partitionInfo
     except Exception as e:
         print('Exception while initiating download', e)
+        traceback.print_exc()
     
 def _SendPartitionData(partitionData, requestId):
-    if 'partitions' in partitionData:
-        for partition in partitionData['partitions']:
-            # if partition['port'] == PORT:
-            #     continue
-            partition['src'] = _BuildUrl(REMOTE_SERVER, PORT, 'v1/chunk')
-            partition['reqId'] = requestId
-            # print('Sending partition info to', partition['addr'], partition['port'], partition)
-            postRequest(partition['addr'], partition['port'], 'v1/partitionData', partition)
+    print(partitionData)
+    if 'partitionData' in partitionData:
+        try:
+            admin=True
+            for partition in partitionData['partitionData']:
+                # if partition['port'] == PORT:
+                #     continue
+                partition['src'] = _BuildUrl(REMOTE_SERVER, PORT, 'v1/chunk/' + requestId + '/' + partition['fileName'])
+                partition['reqId'] = requestId
+                partition['admin'] = admin
+                admin = False
+                # print('Sending partition info to', partition['addr'], partition['port'], partition)
+                postRequest(partition['addr'], partition['port'], 'v1/partitionData', partition)
+        except Exception as e:
+            raise e
     else:
         raise Exception('Partitions not found in the partition data')
     
 def postRequest(addr, port, path, data, protocol='http'):
     try:
-        res = requests.post(_BuildUrl(addr, port, path, protocol), json=data)
+        url = _BuildUrl(addr, port, path, protocol)
+        print('Post request :', url)
+        res = requests.post(url, json=data)
         if res.status_code != 200:
             raise Exception('Request failed. Status code ' + str(res.status_code) + ' received - ' + res.reason)
     except Exception as e:
@@ -96,46 +115,47 @@ def getRequest(addr, port, path, params=None, protocol='http'):
         raise e
     return res
 
-def _SendHelperData():
+def _SendHelperData(reqId):
     try:
-        helpers = _FindHelpers()
-        # _PostRequest(REMOTE_SERVER, PORT, 'v1/helpersdata', helpers)
+        helpers = _FindHelpers(reqId)
+        res = postRequest(REMOTE_SERVER, PORT, 'v1/helpersData', helpers)
+        return res.json()
     except Exception as e:
         raise Exception('Error while finding helper node', e)
         # TODO send abort to server
-    res = {'partitions': [
-        {'addr': '127.0.0.1',
-        'port': 9999,
-        'chunk': 0},
-        {'addr': '127.0.0.1',
-        'port': 9998,
-        'chunk': 1},
-        {'addr': '127.0.0.1',
-        'port': 9997,
-        'chunk': 2}]}
-    return res
+    # res = {'partitions': [
+    #     {'addr': '127.0.0.1',
+    #     'port': 9999,
+    #     'chunk': 0},
+    #     {'addr': '127.0.0.1',
+    #     'port': 9998,
+    #     'chunk': 1},
+    #     {'addr': '127.0.0.1',
+    #     'port': 9997,
+    #     'chunk': 2}]}
 
 def _BuildUrl(addr, port, path, protocol='http'):
     return protocol + '://' + addr + ':' + str(port) + ('/' if not path.startswith('/') else '') + path
 
-def _FindHelpers():
+def _FindHelpers(reqId):
     detectedHelpers = [{'addr': '127.0.0.1',
                         'port': 9999},
                        {'addr': '127.0.0.1',
                         'port': 9998},
                        {'addr': '127.0.0.1',
                         'port': 9997}]
-    return detectedHelpers
+    data = {'requestId': reqId, 'helpers': detectedHelpers}
+    return data
 
 def downloadChunk(partition, progressdict):
-    chunkId = partition['reqId'] + '-' + str(partition['chunk'])
+    chunkId = partition['reqId'] + '-' + str(partition['fileName'])
     try:
         # https://speed.hetzner.de/100MB.bin
-        print('Starting download from', partition['src'], 'with chunk', partition['chunk'])
+        print('Starting download from', partition['src'], 'with chunk', partition['fileName'])
         file_name = 'chunks/' + chunkId
-        # link = partition['src']
+        link = partition['src']
         # link = 'https://speed.hetzner.de/100MB.bin'
-        link = 'http://speedtest.ftp.otenet.gr/files/test10Mb.db'
+        # link = 'http://speedtest.ftp.otenet.gr/files/test10Mb.db'
         with open(file_name, "wb") as f:
             response = requests.get(link, stream=True)
             total_length = response.headers.get('content-length')

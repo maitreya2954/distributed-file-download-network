@@ -1,17 +1,17 @@
 import requests
 import sys
+import traceback
 
 
 def downloadChunk(partition, progressdict):
-    chunkId = partition['reqId'] + '-' + str(partition['chunk'])
+    chunkId = partition['reqId'] + '-' + str(partition['fileName'])
     try:
         # https://speed.hetzner.de/100MB.bin
-        print('Starting download from',
-              partition['src'], 'with chunk', partition['chunk'])
+        print('Starting download from', partition['src'], 'with chunk', partition['fileName'])
         file_name = 'chunks/' + chunkId
-        # link = partition['src']
+        link = partition['src']
         # link = 'https://speed.hetzner.de/10MB.bin'
-        link = 'http://speedtest.ftp.otenet.gr/files/test10Mb.db'
+        # link = 'http://speedtest.ftp.otenet.gr/files/test10Mb.db'
         with open(file_name, "wb") as f:
             response = requests.get(link, stream=True)
             total_length = response.headers.get('content-length')
@@ -34,3 +34,4 @@ def downloadChunk(partition, progressdict):
         # print('Download complete')
     except Exception as e:
         print('Error occured while downloading the chunk', e)
+        traceback.print_exc()
