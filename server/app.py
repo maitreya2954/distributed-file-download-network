@@ -2,9 +2,11 @@ from flask import request, url_for,jsonify,send_from_directory
 from flask_api import FlaskAPI, status, exceptions
 from multiprocessing.pool import ThreadPool
 from filesplit.split import Split
+from flask.templating import render_template
+from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate, migrate
 import os
 import math
-import json
 import time
 import requests
 import traceback
@@ -21,6 +23,26 @@ print('Thread pool created with ' + str(NO_OF_THREADS) + ' threads')
 
 app = FlaskAPI(__name__)
 
+# adding configuration for using a sqlite database
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///site.db'
+ 
+# Creating an SQLAlchemy instance
+db = SQLAlchemy(app)
+ 
+# Settings for migrations
+migrate = Migrate(app, db)
+
+# Models
+class Node(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    ip = db.Column(db.String(20), unique=False, nullable=False)
+    port = db.Column(db.String(5), unique=False, nullable=False)
+ 
+    # repr method represents how one object of this datatable
+    # will look like
+    def __repr__(self):
+        return f"ip address : {self.ip}, port: {self.port}"
+
 def downloadHandler(url,reqId,targetIp):
     filename = url.split('/')[-1]
     
@@ -31,6 +53,25 @@ def downloadHandler(url,reqId,targetIp):
         postRequest(targetIp,PORT, 'v1/ready', {'requestId':reqId})    
     except Exception as e:
         print('Error while downloading file', e)
+
+@app.route('/v1/register', methods=["POST"])
+def registerNode():
+    req = request.json
+    N = Node(ip = req['addr'], port = req['port'])
+    db.session.add(N)
+    db.session.commit()
+
+@app.route('/v1/getNodes, methods=["GET"]')
+def getNodes():
+    Nodes = Node.query.all()
+    res = []
+    reqIp = request.environ.get('HTTP_X_FORWARDED_FOR', request.remote_addr).split('.')
+    for N in Nodes:
+        nodeIp = N.ip.split('.')
+        if nodeIp[0] == reqIp[0] and nodeIp[1] == reqIp[1]:
+            node = {'addr':N.ip,'port':N.port}
+            res.append(node)
+    return res
 
 @app.route('/')
 def landing():
@@ -116,4 +157,6 @@ def _BuildUrl(addr, port, path, protocol='http'):
     return protocol + '://' + addr + ':' + str(port) + ('/' if not path.startswith('/') else '') + path
 
 if __name__=='__main__':
+    
+    db.create_all()
     app.run(debug=True)
