@@ -56,12 +56,19 @@ def downloadHandler(url,reqId,targetIp):
 
 @app.route('/v1/register', methods=["POST"])
 def registerNode():
+    #print(db)
     req = request.json
-    N = Node(ip = req['addr'], port = req['port'])
-    db.session.add(N)
-    db.session.commit()
+    #print("The client IP is: {}".format(request.environ['REMOTE_ADDR']))
+    #print("The client port is: {}".format(request.environ['REMOTE_PORT']))
+    N1 = Node.query.filter_by(ip=req['addr'], port = req['port']).first()
+    #print(N1)
+    if N1 is None:
+        N = Node(ip = req['addr'], port = req['port'])
+        db.session.add(N)
+        db.session.commit()
+    return ''
 
-@app.route('/v1/getNodes, methods=["GET"]')
+@app.route('/v1/getNodes', methods=["GET"])
 def getNodes():
     Nodes = Node.query.all()
     res = []
