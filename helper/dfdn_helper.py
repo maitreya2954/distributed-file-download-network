@@ -9,8 +9,8 @@ def downloadChunk(partition, progressdict):
         # https://speed.hetzner.de/100MB.bin
         print('Starting download from', partition['src'], 'with chunk', partition['fileName'])
         file_name = 'chunks/' + chunkId
-        link = partition['src']
-        # link = 'https://speed.hetzner.de/10MB.bin'
+        # link = partition['src']
+        link = 'https://speed.hetzner.de/100MB.bin'
         # link = 'http://speedtest.ftp.otenet.gr/files/test10Mb.db'
         with open(file_name, "wb") as f:
             response = requests.get(link, stream=True)

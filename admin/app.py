@@ -2,12 +2,12 @@ from flask import request, render_template
 from flask_api import FlaskAPI, status, exceptions
 from multiprocessing.pool import ThreadPool
 from multiprocessing import Manager
-from dfdn_admin import initiateDownload, postRequest, downloadChunk, REMOTE_SERVER, PORT
-import time
+from dfdn_admin import initiateDownload, postRequest, getRequest, downloadChunk, REMOTE_SERVER, PORT
 import os
 import sys
 import signal
 import traceback
+from requests.exceptions import ReadTimeout
 
 POOL = None
 NO_OF_THREADS = 5
@@ -84,8 +84,21 @@ def shutdown_hook(signum=None, frame=None):
     PROGRESS_DICT.clear()
     MANAGER.shutdown()
     sys.exit(0)
-    
+
 signal.signal(signal.SIGINT, shutdown_hook)
+    
+@app.route('/v1/test', methods=['POST'])
+def testApi():
+    try:
+        getRequest('127.0.0.1', 9998, 'v1/healthCheck')
+        return ''
+    except ReadTimeout as e:
+        print('read time exception occured')
+        return 'timeout', status.HTTP_500_INTERNAL_SERVER_ERROR
+    except:
+        traceback.print_exc()
+        return 'Error occured', status.HTTP_500_INTERNAL_SERVER_ERROR
+
 # print(app.config["SERVER_NAME"])
 # registerData = {'addr': '66.71.23.120', 'port': '9999'}
 # postRequest(REMOTE_SERVER, PORT, 'v1/register', registerData)
