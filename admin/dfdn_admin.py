@@ -7,7 +7,7 @@ import shutil
 import traceback
 import hashlib
 
-REMOTE_SERVER='10.0.0.209'
+REMOTE_SERVER='66.71.99.64'
 PORT=9999
 
 def downloadComplete(partitionInfo):
@@ -60,6 +60,7 @@ def _GatherChunks(requestId, partitionInfo):
             bytes = f.read()
             if hashlib.md5(bytes).hexdigest() == partitionInfo['checksum']:
                 print('Merge successfully completed')
+                os.system('open downloads/' + requestId + '/' + partitionInfo['originalName'])
             else:
                 raise Exception('File corrupted')
     except Exception as e:
@@ -77,7 +78,7 @@ def initiateDownload(requestId):
         traceback.print_exc()
     
 def _SendPartitionData(partitionData, requestId):
-    print(partitionData)
+    # print(partitionData)
     if 'partitionData' in partitionData:
         try:
             admin=True
@@ -138,6 +139,7 @@ def _BuildUrl(addr, port, path, protocol='http'):
     return protocol + '://' + addr + ':' + str(port) + ('/' if not path.startswith('/') else '') + path
 
 def _FindHelpers(reqId):
+    # detectedHelpers = getRequest(REMOTE_SERVER, PORT, 'v1/getNodes')
     detectedHelpers = [{'addr': '127.0.0.1',
                         'port': 9999},
                        {'addr': '127.0.0.1',

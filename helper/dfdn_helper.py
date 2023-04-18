@@ -35,3 +35,18 @@ def downloadChunk(partition, progressdict):
     except Exception as e:
         print('Error occured while downloading the chunk', e)
         traceback.print_exc()
+
+
+def postRequest(addr, port, path, data, protocol='http'):
+    try:
+        url = _BuildUrl(addr, port, path, protocol)
+        print('Post request :', url)
+        res = requests.post(url, json=data)
+        if res.status_code != 200:
+            raise Exception('Request failed. Status code ' + str(res.status_code) + ' received - ' + res.reason)
+    except Exception as e:
+        raise e
+    return res
+
+def _BuildUrl(addr, port, path, protocol='http'):
+    return protocol + '://' + addr + ':' + str(port) + ('/' if not path.startswith('/') else '') + path

@@ -1,12 +1,14 @@
 from flask import request, send_from_directory
 from flask_api import FlaskAPI, status
-from dfdn_helper import downloadChunk
+from dfdn_helper import downloadChunk, postRequest
 from multiprocessing.pool import ThreadPool
 from multiprocessing import Manager
 import os
 import signal
 import sys
 
+REMOTE_SERVER='66.71.99.64'
+PORT=9999
 POOL = None
 NO_OF_THREADS = 5
 
@@ -66,6 +68,9 @@ def shutdown_hook(signum=None, frame=None):
     sys.exit(0)
     
 signal.signal(signal.SIGINT, shutdown_hook)
+
+# registerData = {'addr': '66.71.23.120', 'port': '9999'}
+# postRequest(REMOTE_SERVER, PORT, 'v1/register', registerData)
 
 if __name__=='__main__':
     app.run(debug=True)

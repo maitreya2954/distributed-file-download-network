@@ -86,6 +86,9 @@ def shutdown_hook(signum=None, frame=None):
     sys.exit(0)
     
 signal.signal(signal.SIGINT, shutdown_hook)
+# print(app.config["SERVER_NAME"])
+# registerData = {'addr': '66.71.23.120', 'port': '9999'}
+# postRequest(REMOTE_SERVER, PORT, 'v1/register', registerData)
 
 if __name__=='__main__':
     app.run(debug=True)
