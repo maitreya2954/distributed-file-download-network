@@ -111,9 +111,7 @@ def testApi():
         traceback.print_exc()
         return 'Error occured', status.HTTP_500_INTERNAL_SERVER_ERROR
 
-print(app.config["SERVER_NAME"])
-registerData = {'addr': '66.71.23.120', 'port': '9999'}
-postRequest(REMOTE_SERVER, PORT, 'v1/register', registerData)
+postRequest(REMOTE_SERVER, PORT, 'v1/register', None)
 
 if __name__=='__main__':
     app.run(debug=True)

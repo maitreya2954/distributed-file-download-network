@@ -70,8 +70,7 @@ def shutdown_hook(signum=None, frame=None):
     
 signal.signal(signal.SIGINT, shutdown_hook)
 
-registerData = {'addr': '66.71.23.120', 'port': '9999'}
-postRequest(REMOTE_SERVER, PORT, 'v1/register', registerData)
+postRequest(REMOTE_SERVER, PORT, 'v1/register', None)
 
 if __name__=='__main__':
     app.run(debug=True)
