@@ -9,7 +9,8 @@ import hashlib
 from requests.exceptions import ReadTimeout,ConnectionError
 import random
 
-REMOTE_SERVER='10.0.0.209'
+REMOTE_SERVER='66.71.62.77'
+# REMOTE_SERVER='10.0.0.209'
 PORT=9999
 TIMEOUT=5 # 5 seconds
 MAX_RETRIES=3
@@ -23,8 +24,9 @@ def downloadComplete(partitionInfo):
 
 
 def reassignPartition(partition, allpartitions):
-    modpartitions = [d for d in allpartitions if d['port'] != partition['port']]
-    # modpartition = [d for d in allpartitions if d['addr'] != partition['addr']]
+    # TEST MARKER
+    # modpartitions = [d for d in allpartitions if d['port'] != partition['port']]
+    modpartitions = [d for d in allpartitions if d['addr'] != partition['addr']]
     reassignedPartition = random.choice(modpartitions)
     partition['addr'] = reassignedPartition['addr']
     partition['port'] = reassignedPartition['port']
@@ -35,6 +37,7 @@ def reassignPartition(partition, allpartitions):
 
 def _MonitorProgress(partitionInfo):
     try:
+        partitionInfo = partitionInfo['partitionData']
         print('Progress monitor started')
         for partition in partitionInfo:
             partition['progress'] = 0
@@ -47,7 +50,7 @@ def _MonitorProgress(partitionInfo):
                     try:
                         res = getRequest(partition['addr'], partition['port'], '/v1/progress/' + chunkId)
                     except:
-                        print('Re-assigning the partition to different nodes')
+                        print('Re-assigning',partition['fileName'],'to different nodes')
                         reassignPartition(partition, partitionInfo)
                     partition['progress'] = res.json()['progress']
                 printstring += partition['addr'] + ':' + str(partition['port']) + ' - ' + str(partition['progress']) + ' | '
@@ -87,13 +90,12 @@ def _GatherChunks(requestId, partitionInfo):
     except Exception as e:
         raise e
     
-def initiateDownload(requestId):
+def initiateDownload(requestId, partitiondict):
     try:
-        partitionInfo = _SendHelperData(requestId)
-        _SendPartitionData(partitionInfo, requestId)
-        _MonitorProgress(partitionInfo['partitionData'])
-        _GatherChunks(requestId, partitionInfo)
-        return partitionInfo
+        partitiondict[requestId] = _SendHelperData(requestId)
+        _SendPartitionData(partitiondict[requestId], requestId)
+        _MonitorProgress(partitiondict[requestId])
+        _GatherChunks(requestId, partitiondict[requestId])
     except Exception as e:
         print('Exception while initiating download', e)
         traceback.print_exc()
@@ -184,19 +186,20 @@ def getRequest(addr, port, path, params=None, protocol='http'):
 def _SendHelperData(reqId):
     try:
         helpers = _FindHelpers(reqId)
-        # res = postRequest(REMOTE_SERVER, PORT, 'v1/helpersData', helpers)
-        # return res.json()
-        res = {'partitionData': [
-            {'addr': '127.0.0.1',
-            'port': 9999,
-            'fileName': 'download-0'},
-            {'addr': '127.0.0.1',
-            'port': 9998,
-            'fileName': 'download-1'},
-            {'addr': '127.0.0.1',
-            'port': 9997,
-            'fileName': 'download-2'}]}
-        return res
+        res = postRequest(REMOTE_SERVER, PORT, 'v1/helpersData', helpers)
+        return res.json()
+        # TEST MARKER
+        # res = {'partitionData': [
+        #     {'addr': '127.0.0.1',
+        #     'port': 9999,
+        #     'fileName': 'download-0'},
+        #     {'addr': '127.0.0.1',
+        #     'port': 9998,
+        #     'fileName': 'download-1'},
+        #     {'addr': '127.0.0.1',
+        #     'port': 9997,
+        #     'fileName': 'download-2'}]}
+        # return res
         
     except Exception as e:
         raise Exception('Error while finding helper node', e)
@@ -206,13 +209,13 @@ def _BuildUrl(addr, port, path, protocol='http'):
     return protocol + '://' + addr + ':' + str(port) + ('/' if not path.startswith('/') else '') + path
 
 def _FindHelpers(reqId):
-    # detectedHelpers = getRequest(REMOTE_SERVER, PORT, 'v1/getNodes')
-    detectedHelpers = [{'addr': '127.0.0.1',
-                        'port': 9999},
-                       {'addr': '127.0.0.1',
-                        'port': 9998},
-                       {'addr': '127.0.0.1',
-                        'port': 9997}]
+    detectedHelpers = getRequest(REMOTE_SERVER, PORT, 'v1/getNodes')
+    # detectedHelpers = [{'addr': '127.0.0.1',
+    #                     'port': 9999},
+    #                    {'addr': '127.0.0.1',
+    #                     'port': 9998},
+    #                    {'addr': '127.0.0.1',
+    #                     'port': 9997}]
     finalizedHelpers = []
     for helper in detectedHelpers:
         try:
@@ -229,8 +232,8 @@ def downloadChunk(partition, progressdict):
         # https://speed.hetzner.de/100MB.bin
         print('Starting download from', partition['src'], 'with chunk', partition['fileName'])
         file_name = 'chunks/' + chunkId
-        # link = partition['src']
-        link = 'https://speed.hetzner.de/100MB.bin'
+        link = partition['src']
+        # link = 'https://speed.hetzner.de/100MB.bin'
         # link = 'http://speedtest.ftp.otenet.gr/files/test10Mb.db'
         with open(file_name, "wb") as f:
             response = requests.get(link, stream=True)

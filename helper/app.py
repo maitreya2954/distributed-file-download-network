@@ -8,7 +8,7 @@ import signal
 import sys
 import time
 
-REMOTE_SERVER='10.0.0.209'
+REMOTE_SERVER='66.71.62.77'
 PORT=9999
 POOL = None
 NO_OF_THREADS = 5
@@ -70,8 +70,8 @@ def shutdown_hook(signum=None, frame=None):
     
 signal.signal(signal.SIGINT, shutdown_hook)
 
-# registerData = {'addr': '66.71.23.120', 'port': '9999'}
-# postRequest(REMOTE_SERVER, PORT, 'v1/register', registerData)
+registerData = {'addr': '66.71.23.120', 'port': '9999'}
+postRequest(REMOTE_SERVER, PORT, 'v1/register', registerData)
 
 if __name__=='__main__':
     app.run(debug=True)

@@ -8,6 +8,7 @@ import sys
 import signal
 import traceback
 from requests.exceptions import ReadTimeout
+import time
 
 POOL = None
 NO_OF_THREADS = 5
@@ -19,11 +20,18 @@ MANAGER = Manager()
 print('Created a pool manager')
 
 PROGRESS_DICT = MANAGER.dict()
+PARTITIONS_DICT = MANAGER.dict()
 
 try:
     os.mkdir('chunks')
 except Exception as e:
     print(e)
+    
+import socket
+hostname = socket.gethostname()
+ip_address = socket.gethostbyname(hostname)
+print(f"Hostname: {hostname}")
+print(f"IP Address: {ip_address}")
     
 
 app = FlaskAPI(__name__)
@@ -40,11 +48,10 @@ def serverup():
 @app.route('/v1/ready', methods=['POST'])
 def ready():
     try:
-        # TODO : Take request id from the response
-        
         requestId = request.json['requestId']
+        # TEST MARKER
         # requestId = str(time.time())
-        POOL.apply_async(initiateDownload, args=[requestId])
+        POOL.apply_async(initiateDownload, args=[requestId, PARTITIONS_DICT])
         return 'Completed'
     except Exception as e:
         print('Error occured while initiating download')
@@ -56,8 +63,10 @@ def downloadLink():
     try:
         link = request.form['dlink']
         jsondata = {'url': link}
-        postRequest(REMOTE_SERVER, PORT, 'v1/begin', data=jsondata)
-        return render_template('success.html')
+        res = postRequest(REMOTE_SERVER, PORT, 'v1/begin', data=jsondata)
+        requestId = res.json['requestId']
+        requestId = str(time.time())
+        return render_template('success.html', requestId=requestId)
     except Exception as e:
         print('Error occured while sending the link to server', e)
         return render_template('error.html'), status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -75,8 +84,11 @@ def partitiondata():
 
 @app.route('/v1/progress/<chunkId>', methods=['GET'])
 def progress(chunkId):
-    # print('Progress API', getProgress())
     return {'progress': PROGRESS_DICT[chunkId] if chunkId in PROGRESS_DICT else 0}
+
+@app.route('/v1/partitions/<requestId>', methods=['GET'])
+def partitions(requestId):
+    return PARTITIONS_DICT[requestId]
 
 def shutdown_hook(signum=None, frame=None):
     print('Shutdown hook invoked. Shutting down.')
@@ -99,9 +111,9 @@ def testApi():
         traceback.print_exc()
         return 'Error occured', status.HTTP_500_INTERNAL_SERVER_ERROR
 
-# print(app.config["SERVER_NAME"])
-# registerData = {'addr': '66.71.23.120', 'port': '9999'}
-# postRequest(REMOTE_SERVER, PORT, 'v1/register', registerData)
+print(app.config["SERVER_NAME"])
+registerData = {'addr': '66.71.23.120', 'port': '9999'}
+postRequest(REMOTE_SERVER, PORT, 'v1/register', registerData)
 
 if __name__=='__main__':
     app.run(debug=True)
