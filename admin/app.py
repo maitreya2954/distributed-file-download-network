@@ -26,13 +26,6 @@ try:
     os.mkdir('chunks')
 except Exception as e:
     print(e)
-    
-import socket
-hostname = socket.gethostname()
-ip_address = socket.gethostbyname(hostname)
-print(f"Hostname: {hostname}")
-print(f"IP Address: {ip_address}")
-    
 
 app = FlaskAPI(__name__)
 
