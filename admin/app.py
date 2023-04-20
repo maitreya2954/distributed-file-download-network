@@ -34,7 +34,7 @@ app = FlaskAPI(__name__)
 def landing():
     return render_template('index.html', title='Admin App', name='Siddharth')
 
-@app.route('/healthCheck', methods=['GET'])
+@app.route('/v1/healthCheck', methods=['GET'])
 def serverup():
     return ''
 
@@ -57,9 +57,11 @@ def downloadLink():
         link = request.form['dlink']
         jsondata = {'url': link}
         res = postRequest(REMOTE_SERVER, PORT, 'v1/begin', data=jsondata)
-        requestId = res.json['requestId']
-        requestId = str(time.time())
-        return render_template('success.html', requestId=requestId)
+        requestId = res.json()['requestId']
+        print(requestId)
+        # TEST MARKER
+        # requestId = str(time.time())
+        return render_template('success.html')
     except Exception as e:
         print('Error occured while sending the link to server', e)
         return render_template('error.html'), status.HTTP_500_INTERNAL_SERVER_ERROR

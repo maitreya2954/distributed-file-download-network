@@ -14,7 +14,7 @@ REMOTE_SERVER='66.71.62.77'
 PORT=9999
 TIMEOUT=5 # 5 seconds
 MAX_RETRIES=3
-BACKOFF_FACTOR=2
+BACKOFF_FACTOR=1
 
 def downloadComplete(partitionInfo):
     done = 1
@@ -32,12 +32,14 @@ def reassignPartition(partition, allpartitions):
     partition['port'] = reassignedPartition['port']
     partition['progress'] = 0
     partition['admin'] = reassignedPartition['admin']
-    _SendPartitionDataToHelper(partition, partition['reqId'])
+    
+    # print('Sending partition info to', partition['addr'], partition['port'], partition)
+    postRequest(partition['addr'], partition['port'], 'v1/partitionData', partition)
     
 
-def _MonitorProgress(partitionInfo):
+def _MonitorProgress(partitionData):
     try:
-        partitionInfo = partitionInfo['partitionData']
+        partitionInfo = partitionData['partitionData']
         print('Progress monitor started')
         for partition in partitionInfo:
             partition['progress'] = 0
@@ -45,6 +47,7 @@ def _MonitorProgress(partitionInfo):
         while not downloadComplete(partitionInfo):  
             printstring = '' 
             for partition in partitionInfo:
+                print(partition)
                 chunkId = partition['reqId'] + '-' + str(partition['fileName'])
                 if partition['progress'] != 100:
                     try:
@@ -92,20 +95,13 @@ def _GatherChunks(requestId, partitionInfo):
     
 def initiateDownload(requestId, partitiondict):
     try:
-        partitiondict[requestId] = _SendHelperData(requestId)
-        _SendPartitionData(partitiondict[requestId], requestId)
-        _MonitorProgress(partitiondict[requestId])
-        _GatherChunks(requestId, partitiondict[requestId])
+        partitionData = _SendHelperData(requestId)
+        _SendPartitionData(partitionData, requestId)
+        _MonitorProgress(partitionData)
+        _GatherChunks(requestId, partitionData)
     except Exception as e:
         print('Exception while initiating download', e)
         traceback.print_exc()
-        
-def _SendPartitionDataToHelper(partition, requestId):
-    partition['src'] = _BuildUrl(REMOTE_SERVER, PORT, 'v1/chunk/' + requestId + '/' + partition['fileName'])
-    partition['reqId'] = requestId
-    
-    # print('Sending partition info to', partition['addr'], partition['port'], partition)
-    postRequest(partition['addr'], partition['port'], 'v1/partitionData', partition)
     
 def _SendPartitionData(partitionData, requestId):
     # print(partitionData)
@@ -115,7 +111,11 @@ def _SendPartitionData(partitionData, requestId):
             for partition in partitionData['partitionData']:
                 partition['admin'] = admin
                 admin = False
-                _SendPartitionDataToHelper(partition, requestId)
+                partition['src'] = _BuildUrl(REMOTE_SERVER, PORT, 'v1/chunk/' + requestId + '/' + partition['fileName'])
+                partition['reqId'] = requestId
+                
+                # print('Sending partition info to', partition['addr'], partition['port'], partition)
+                postRequest(partition['addr'], partition['port'], 'v1/partitionData', partition)
         except Exception as e:
             raise e
     else:
@@ -209,13 +209,14 @@ def _BuildUrl(addr, port, path, protocol='http'):
     return protocol + '://' + addr + ':' + str(port) + ('/' if not path.startswith('/') else '') + path
 
 def _FindHelpers(reqId):
-    detectedHelpers = getRequest(REMOTE_SERVER, PORT, 'v1/getNodes')
+    detectedHelpers = getRequest(REMOTE_SERVER, PORT, 'v1/getNodes').json()
     # detectedHelpers = [{'addr': '127.0.0.1',
     #                     'port': 9999},
     #                    {'addr': '127.0.0.1',
     #                     'port': 9998},
     #                    {'addr': '127.0.0.1',
     #                     'port': 9997}]
+    print('Detected helpers: ', detectedHelpers)
     finalizedHelpers = []
     for helper in detectedHelpers:
         try:
