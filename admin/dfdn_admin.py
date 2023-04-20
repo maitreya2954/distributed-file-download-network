@@ -47,7 +47,6 @@ def _MonitorProgress(partitionData):
         while not downloadComplete(partitionInfo):  
             printstring = '' 
             for partition in partitionInfo:
-                print(partition)
                 chunkId = partition['reqId'] + '-' + str(partition['fileName'])
                 if partition['progress'] != 100:
                     try:
