@@ -11,6 +11,7 @@ import time
 import requests
 import traceback
 import hashlib
+import shutil
 #from dfdn_server import downloadHandler
 
 PORT = '9999'
@@ -42,30 +43,46 @@ class Node(db.Model):
     # will look like
     def __repr__(self):
         return f"ip address : {self.ip}, port: {self.port}"
+    
+class Request(db.Model):
+    id = db.Column(db.String(50), primary_key=True)
+    url = db.Column(db.String(200), unique=False, nullable=False)
+    fileName = db.Column(db.String(5), unique=False, nullable=False)
 
-def downloadHandler(url,reqId,targetIp):
+    # repr method represents how one object of this datatable
+    # will look like
+    def __repr__(self):
+        return f"RequestId : {self.id}, url: {self.url}, fileName: {self.fileName}"
+
+def downloadHandler(url,reqId,targetIp,foundRecent,R):
     filename = url.split('/')[-1]
     
     try:
-        r = requests.get(url, allow_redirects=True)
+        
         os.mkdir('./'+reqId)
-        open('./'+reqId+'/'+filename, 'wb').write(r.content)
+        if foundRecent and os.path.exists('./'+R.id+'/'+R.fileName):
+            shutil.copy2('./'+R.id+'/'+R.fileName,'./'+reqId)
+        else:
+            r = requests.get(url, allow_redirects=True)
+            open('./'+reqId+'/'+filename, 'wb').write(r.content)
+        
         postRequest(targetIp,PORT, 'v1/ready', {'requestId':reqId})    
     except Exception as e:
+        traceback.print_exc()
         print('Error while downloading file', e)
 
 @app.route('/v1/register', methods=["POST"])
 def registerNode():
-    #print(db)
-    req = request.json
-    #print("The client IP is: {}".format(request.environ['REMOTE_ADDR']))
-    #print("The client port is: {}".format(request.environ['REMOTE_PORT']))
-    N1 = Node.query.filter_by(ip=req['addr'], port = req['port']).first()
+    
+    reqIp = request.environ.get('HTTP_X_FORWARDED_FOR', request.remote_addr)
+
+    N1 = Node.query.filter_by(ip=reqIp, port = PORT).first()
     #print(N1)
     if N1 is None:
-        N = Node(ip = req['addr'], port = req['port'])
+        N = Node(ip = reqIp, port = PORT)
         db.session.add(N)
         db.session.commit()
+        #print(N)
     return ''
 
 @app.route('/v1/getNodes', methods=["GET"])
@@ -93,12 +110,27 @@ def begin():
     try:
         url = ''
         req = request.get_json(force=True)
+        print(req)
         if 'url' in req:
             url = req['url']
+        else:
+            return 'url not found', status.HTTP_500_INTERNAL_SERVER_ERROR
+        filename = url.split('/')[-1]
         ip_addr = request.environ.get('HTTP_X_FORWARDED_FOR', request.remote_addr)
         reqId = str(ip_addr+'-'+str(time.time()))
-        POOL.apply_async(downloadHandler, args=[url,reqId,ip_addr])
-        return '200'
+
+        R = Request.query.filter_by(url=url).first()
+        foundRecent = False
+        if R is not None:
+            foundRecent = True
+        else:
+            newR = Request(id = reqId,url = url,fileName = filename)
+            db.session.add(newR)
+            db.session.commit()
+
+        POOL.apply_async(downloadHandler, args=[url,reqId,ip_addr,foundRecent,R])
+        resObj = {'requestId':reqId}
+        return resObj
     except Exception as e:
         print('Error occured while initiating download', e)
         traceback.print_exc()
@@ -160,10 +192,25 @@ def postRequest(addr, port, path, data, protocol='http'):
         raise e
     return 
 
+def clear_data(session):
+    meta = db.metadata
+    for table in reversed(meta.sorted_tables):
+        print ('Clear table %s' % table)
+        session.execute(table.delete())
+    session.commit()    
+
+@app.route('/v1/clearData', methods=['GET'])
+def clearData():
+    db.drop_all()
+    db.create_all()
+    return ''
+
 def _BuildUrl(addr, port, path, protocol='http'):
     return protocol + '://' + addr + ':' + str(port) + ('/' if not path.startswith('/') else '') + path
+
 
 if __name__=='__main__':
     
     db.create_all()
     app.run(debug=True)
+    
