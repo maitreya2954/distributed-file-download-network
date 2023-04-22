@@ -12,7 +12,7 @@ import requests
 import traceback
 import hashlib
 import shutil
-#from dfdn_server import downloadHandler
+import sys
 
 PORT = '9999'
 
@@ -58,13 +58,27 @@ def downloadHandler(url,reqId,targetIp,foundRecent,R):
     filename = url.split('/')[-1]
     
     try:
-        
-        os.mkdir('./'+reqId)
+        dir = './'+reqId
+        os.mkdir(dir)
         if foundRecent and os.path.exists('./'+R.id+'/'+R.fileName):
             shutil.copy2('./'+R.id+'/'+R.fileName,'./'+reqId)
         else:
-            r = requests.get(url, allow_redirects=True)
-            open('./'+reqId+'/'+filename, 'wb').write(r.content)
+            print('Starting download for', url)
+            with open(dir+'/'+filename, "wb") as f:
+                response = requests.get(url, stream=True)
+                total_length = response.headers.get('content-length')
+
+                if total_length is None:  # no content length header
+                    f.write(response.content)
+                else:
+                    dl = 0
+                    total_length = int(total_length)
+                    for data in response.iter_content(chunk_size=8192):
+                        dl += len(data)
+                        f.write(data)
+                        progress = int((dl*100)/total_length)
+                        sys.stdout.write('\rProgress: ' + str(progress))
+                        sys.stdout.flush()
         
         postRequest(targetIp,PORT, 'v1/ready', {'requestId':reqId})    
     except Exception as e:
@@ -89,12 +103,16 @@ def registerNode():
 def getNodes():
     Nodes = Node.query.all()
     res = []
-    reqIp = request.environ.get('HTTP_X_FORWARDED_FOR', request.remote_addr).split('.')
+    ipAddr = request.environ.get('HTTP_X_FORWARDED_FOR', request.remote_addr)
+    reqIp = ipAddr.split('.')
     for N in Nodes:
         nodeIp = N.ip.split('.')
         if nodeIp[0] == reqIp[0] and nodeIp[1] == reqIp[1]:
             node = {'addr':N.ip,'port':N.port}
-            res.append(node)
+            if ipAddr == N.ip:
+                res.insert(0,node)
+            else:
+                res.append(node)
     return res
 
 @app.route('/')
@@ -110,7 +128,7 @@ def begin():
     try:
         url = ''
         req = request.get_json(force=True)
-        print(req)
+        #print(req)
         if 'url' in req:
             url = req['url']
         else:
@@ -140,6 +158,7 @@ def begin():
 def helperData():
     try:
         req = request.json
+        print('creating chunks for request'+str(req['requestId'])+str(req['helpers']))
         reqId = req['requestId']
         count = 0
         if 'helpers' in req:
@@ -153,14 +172,20 @@ def helperData():
                 filename = i
         fileSize = os.path.getsize(dirName+'/'+filename)
         split = Split(dirName+'/'+filename,dirName+'/chunks')
-        split.bysize(math.ceil(fileSize/(count-1)))
+        splitSize = math.ceil(fileSize/(count)) + 5*1024*1024
+        print('spliiting size'+str(splitSize))
+        split.bysize(splitSize)
         resMap = {}
         resMap['requestId'] = reqId
         resMap['partitionData'] = []
         i = 0
+        ip_addr = request.environ.get('HTTP_X_FORWARDED_FOR', request.remote_addr)
         for path in os.scandir(dirName+'/chunks'):
-            if path.is_file() and path.name != 'manifest':
-                resMap['partitionData'].append({'fileName':path.name,'fileSize':os.path.getsize(path),'addr':req['helpers'][i]['addr'],'port':req['helpers'][i]['port']})
+            if path.is_file() and path.name != 'manifest': 
+                if request.environ.get('HTTP_X_FORWARDED_FOR', request.remote_addr) == req['helpers'][i]['addr']:
+                    resMap['partitionData'].insert(0,{'fileName':path.name,'fileSize':os.path.getsize(path),'addr':req['helpers'][i]['addr'],'port':req['helpers'][i]['port']})
+                else:    
+                    resMap['partitionData'].append({'fileName':path.name,'fileSize':os.path.getsize(path),'addr':req['helpers'][i]['addr'],'port':req['helpers'][i]['port']})
                 i += 1
         manifestF = open(dirName+'/chunks/manifest','r')
         manifest = manifestF.read()
