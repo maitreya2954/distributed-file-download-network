@@ -9,8 +9,8 @@ import hashlib
 from requests.exceptions import ReadTimeout,ConnectionError
 import random
 
-REMOTE_SERVER='66.71.62.77'
-# REMOTE_SERVER='10.0.0.209'
+#REMOTE_SERVER='66.71.62.77'
+REMOTE_SERVER='10.0.0.209'
 PORT=9999
 TIMEOUT=5 # 5 seconds
 MAX_RETRIES=3
