@@ -24,6 +24,7 @@
             align-items: center;
             justify-content: center;
             margin: 0;
+            color: #555;
         }
 
         #download-form {
@@ -46,7 +47,7 @@
         }
 
         #download-bar::placeholder {
-            color: #bbb;
+            color: grey;
             font-weight: 200;
         }
 
@@ -68,6 +69,7 @@
 
 <body class="bg-error-500">
     <div id="admin-container">
+        <h1>Welcome to Admin page!!!</h1>
         <form id="download-form" action="/v1/downloadLink" method="post">
             <input id="download-bar" type="text" placeholder="Enter the download link..." name="dlink">
         </form>

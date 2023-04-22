@@ -61,7 +61,7 @@ def downloadLink():
         print(requestId)
         # TEST MARKER
         # requestId = str(time.time())
-        return render_template('success.html')
+        return render_template('success.html', requestId=requestId)
     except Exception as e:
         print('Error occured while sending the link to server', e)
         return render_template('error.html'), status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -83,7 +83,7 @@ def progress(chunkId):
 
 @app.route('/v1/partitions/<requestId>', methods=['GET'])
 def partitions(requestId):
-    return PARTITIONS_DICT[requestId]
+    return PARTITIONS_DICT[requestId] if requestId in PARTITIONS_DICT else {'status': 0}
 
 def shutdown_hook(signum=None, frame=None):
     print('Shutdown hook invoked. Shutting down.')

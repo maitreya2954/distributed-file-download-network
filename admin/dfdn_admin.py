@@ -8,6 +8,7 @@ import traceback
 import hashlib
 from requests.exceptions import ReadTimeout,ConnectionError
 import random
+import threading
 
 REMOTE_SERVER='66.71.62.77'
 # REMOTE_SERVER='10.0.0.209'
@@ -37,12 +38,11 @@ def reassignPartition(partition, allpartitions):
     postRequest(partition['addr'], partition['port'], 'v1/partitionData', partition)
     
 
-def _MonitorProgress(partitionData):
+def _MonitorProgress(partitionData, partitiondict, requestId):
     try:
         partitionInfo = partitionData['partitionData']
+        partitiondict[requestId] = partitionData
         print('Progress monitor started')
-        for partition in partitionInfo:
-            partition['progress'] = 0
         
         while not downloadComplete(partitionInfo):  
             printstring = '' 
@@ -58,26 +58,40 @@ def _MonitorProgress(partitionData):
                 printstring += partition['addr'] + ':' + str(partition['port']) + ' - ' + str(partition['progress']) + ' | '
             sys.stdout.write("\r" + printstring)
             sys.stdout.flush()
+            partitiondict[requestId] = partitionData
             time.sleep(2)
         print('\n>>> Chunks downloaded on all helpers. Starting gathering chunks')
         return partitionInfo
     except Exception as e:
         raise e
+    
+def _DownloadChunk(partition, chunkId, downloadDir):
+    print('Getting chunk: ', chunkId)
+    response = getRequest(partition['addr'], partition['port'], '/v1/chunk/' + chunkId)
+    with open(downloadDir + '/' + partition['fileName'], 'wb') as f:
+        f.write(response.content)
+    print(chunkId, 'received')
         
 def _GatherChunks(requestId, partitionInfo):
     try:
         downloadDir = 'downloads/' + requestId + '/chunks'
         os.makedirs(downloadDir)
+        downloadthreads = []
         for partition in partitionInfo['partitionData']:
             chunkId = partition['reqId'] + '-' + str(partition['fileName'])
             if partition['admin']:
                 shutil.move('chunks/'+chunkId, downloadDir + '/' + partition['fileName'])
             else:
-                print('Getting chunk: ', chunkId)
-                response = getRequest(partition['addr'], partition['port'], '/v1/chunk/' + chunkId)
-                with open(downloadDir + '/' + partition['fileName'], 'wb') as f:
-                    f.write(response.content)
-                print(chunkId, 'received')
+                downloadthreads.append(threading.Thread(target=_DownloadChunk, name=chunkId, args=[partition, chunkId, downloadDir]))
+                # print('Getting chunk: ', chunkId)
+                # response = getRequest(partition['addr'], partition['port'], '/v1/chunk/' + chunkId)
+                # with open(downloadDir + '/' + partition['fileName'], 'wb') as f:
+                #     f.write(response.content)
+                # print(chunkId, 'received')
+        for i in downloadthreads:
+            i.start()
+        for i in downloadthreads:
+            i.join()
         print('Merging files')
         open(downloadDir + '/manifest', "w").write(partitionInfo['manifest'])
         merge = Merge(downloadDir, 'downloads/' + requestId, partitionInfo['originalName'])
@@ -86,7 +100,7 @@ def _GatherChunks(requestId, partitionInfo):
             bytes = f.read()
             if hashlib.md5(bytes).hexdigest() == partitionInfo['checksum']:
                 print('Merge successfully completed')
-                os.system('open downloads/' + requestId + '/' + partitionInfo['originalName'])
+                # os.system('open downloads/' + requestId + '/' + partitionInfo['originalName'])
             else:
                 raise Exception('File corrupted')
     except Exception as e:
@@ -94,16 +108,27 @@ def _GatherChunks(requestId, partitionInfo):
     
 def initiateDownload(requestId, partitiondict):
     try:
+        start=time.time()
         partitionData = _SendHelperData(requestId)
+        partitionData['status'] = 1
+        partitiondict[requestId] = partitionData
         _SendPartitionData(partitionData, requestId)
-        _MonitorProgress(partitionData)
+        partitionData['status'] = 2
+        partitiondict[requestId] = partitionData
+        _MonitorProgress(partitionData, partitiondict, requestId)
+        # partitiondict[requestId]['status'] = 3
+        partitionData['status'] = 3
+        partitiondict[requestId] = partitionData
         _GatherChunks(requestId, partitionData)
+        partitionData['status'] = 4
+        partitiondict[requestId] = partitionData
+        print('Time taken to download: ', time.time()-start)
     except Exception as e:
         print('Exception while initiating download', e)
         traceback.print_exc()
     
 def _SendPartitionData(partitionData, requestId):
-    # print(partitionData)
+    print('PartitionData from server: ', partitionData)
     if 'partitionData' in partitionData:
         try:
             admin=True
@@ -112,7 +137,7 @@ def _SendPartitionData(partitionData, requestId):
                 admin = False
                 partition['src'] = _BuildUrl(REMOTE_SERVER, PORT, 'v1/chunk/' + requestId + '/' + partition['fileName'])
                 partition['reqId'] = requestId
-                
+                partition['progress'] = 0
                 # print('Sending partition info to', partition['addr'], partition['port'], partition)
                 postRequest(partition['addr'], partition['port'], 'v1/partitionData', partition)
         except Exception as e:
@@ -223,6 +248,7 @@ def _FindHelpers(reqId):
             finalizedHelpers.append(helper)
         except:
             print('Node ', helper['addr'] + ':' + str(helper['port']), 'did not respond. Removing from final helper list')
+    print('Final helpers: ', finalizedHelpers)
     data = {'requestId': reqId, 'helpers': finalizedHelpers}
     return data
 
