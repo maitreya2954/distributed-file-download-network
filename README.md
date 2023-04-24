@@ -11,7 +11,7 @@ The project requires `python>=3.9`. Clone the repository. Admin, Server and Help
 ### Installing required packages
 
 ```
-pip install -r requirements
+pip install -r requirements.txt
 ```
 
 Check [admin setup](https://github.com/maitreya2954/distributed-file-download-network/tree/main/admin)
