@@ -17,3 +17,5 @@ pip install -r requirements.txt
 Check [admin setup](https://github.com/maitreya2954/distributed-file-download-network/tree/main/admin)
 
 Check [helper setup](https://github.com/maitreya2954/distributed-file-download-network/tree/main/helper)
+
+Check [server setup](https://github.com/maitreya2954/distributed-file-download-network/tree/main/server)
